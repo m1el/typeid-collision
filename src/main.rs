@@ -148,9 +148,11 @@ fn write_hex(dst: &mut[u8], value: u64) {
     }
 }
 
+fn bifurcation_criterion(state: Point) -> bool {
+    state & 1 != 0
+}
 fn next_point(mod_id: (u64, u64), state: Point) -> Point {
-    let name = if state & 1 != 0 { "Foo" } else { "Bar" };
-
+    let name = if bifurcation_criterion(state) { "Foo" } else { "Bar" };
 
     let mut data = *b"x0000000000000000";
     write_hex(&mut data[1..], state);
@@ -190,7 +192,7 @@ fn main() {
         vec!["a0ecb98bfb1b38c8".to_owned()],
     );
 
-    const I_WANT_TO_DEBUG_DEF_ID: bool = true;
+    const I_WANT_TO_DEBUG_DEF_ID: bool = false;
     if I_WANT_TO_DEBUG_DEF_ID {
         println!("mod def_hash: {:x?}", mod_id);
 
@@ -277,8 +279,11 @@ fn main() {
                                     continue;
                                 }
                                 let (ca, cb) = find_collision(mod_id, *old_start, *old_len, start, trail_steps);
-
-                                println!("found a good collision! ca={:x?} cb={:x?}", ca, cb);
+                                if bifurcation_criterion(ca) == bifurcation_criterion(cb) {
+                                    println!("found self-collision! ca={:x?} cb={:x?}", ca, cb);
+                                } else {
+                                    println!("found a good collision! ca={:x?} cb={:x?}", ca, cb);
+                                }
                                 COLLISIONS.fetch_add(1, Ordering::Relaxed);
                                 break;
                             }
