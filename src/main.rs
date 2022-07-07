@@ -13,6 +13,10 @@ use std::hash::Hasher;
 use crate::xoroshiro::Xoroshiro128Plus;
 use crate::stable_hasher::{HashStable, HashingControls, StableHasher};
 
+const IN_PLAYGROUND_WRAPPER: bool = true;
+const I_WANT_TO_DEBUG_DEF_ID: bool = false;
+const DEFAULT_TRAIL_MASK: u64 = 0x3ffff;
+
 fn hash_of<T: HashStable<CTX>, CTX>(hcx: &mut CTX, val: T) -> (u64, u64) {
     let mut hasher = StableHasher::new();
     val.hash_stable(hcx, &mut hasher);
@@ -36,7 +40,6 @@ fn make_mod_id(crate_name: &str, is_exe: bool, version: &str, mut metadata: Vec<
 
     let crate_id = hasher.finalize().0;
     let mod_id = hash_of(&mut hcx, (crate_id, 0_u64, 0_isize, 0_u32)).0;
-    const IN_PLAYGROUND_WRAPPER: bool = true;
     if IN_PLAYGROUND_WRAPPER {
         let mut hasher = StableHasher::new();
         (crate_id, mod_id).hash_stable(&mut hcx, &mut hasher);
@@ -148,9 +151,13 @@ fn write_hex(dst: &mut[u8], value: u64) {
     }
 }
 
+/// This function should split evenly between two hash paths
+/// which you're trying to collide.
 fn bifurcation_criterion(state: Point) -> bool {
     state & 1 != 0
 }
+
+/// Calculate the next point on the hash 
 fn next_point(mod_id: (u64, u64), state: Point) -> Point {
     let name = if bifurcation_criterion(state) { "Foo" } else { "Bar" };
 
@@ -163,7 +170,9 @@ fn next_point(mod_id: (u64, u64), state: Point) -> Point {
     // field_did(name, field_name)
 }
 
+/// Given two starting points, find the first collision point on a trail
 fn find_collision(mod_id: (u64, u64), mut a: Point, len_a: u64, mut b: Point, len_b: u64,) -> (Point, Point) {
+    // Make the trails the same length by throwing away some of the start
     let _len = if len_a > len_b {
         for _ in 0..(len_a - len_b) {
             a = next_point(mod_id, a);
@@ -175,6 +184,8 @@ fn find_collision(mod_id: (u64, u64), mut a: Point, len_a: u64, mut b: Point, le
         }
         len_a
     };
+
+    // find the collision point
     loop {
         let pa = a;
         let pb = b;
@@ -192,7 +203,6 @@ fn main() {
         vec!["a0ecb98bfb1b38c8".to_owned()],
     );
 
-    const I_WANT_TO_DEBUG_DEF_ID: bool = false;
     if I_WANT_TO_DEBUG_DEF_ID {
         println!("mod def_hash: {:x?}", mod_id);
 
@@ -213,7 +223,7 @@ fn main() {
         static SYNC_POINT: AtomicUsize = AtomicUsize::new(0);
         static HASH_COUNT: AtomicU64= AtomicU64::new(0);
         static CONTENTIONS: AtomicUsize = AtomicUsize::new(0);
-        static TRAIL_MASK: AtomicU64 = AtomicU64::new(0x3ffff);
+        static TRAIL_MASK: AtomicU64 = AtomicU64::new(DEFAULT_TRAIL_MASK);
         static ROBIN_HOOD: AtomicU64 = AtomicU64::new(0);
         static LOOPS: AtomicU64 = AtomicU64::new(0);
         static COLLISIONS: AtomicU64 = AtomicU64::new(0);
