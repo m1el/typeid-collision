@@ -33,9 +33,21 @@ fn make_mod_id(crate_name: &str, is_exe: bool, version: &str, mut metadata: Vec<
 
     hasher.write(if is_exe { b"exe" } else { b"lib" });
     hasher.write(version.as_bytes());
+
     let crate_id = hasher.finalize().0;
     let mod_id = hash_of(&mut hcx, (crate_id, 0_u64, 0_isize, 0_u32)).0;
-    (crate_id, mod_id)
+    const IN_PLAYGROUND_WRAPPER: bool = true;
+    if IN_PLAYGROUND_WRAPPER {
+        let mut hasher = StableHasher::new();
+        (crate_id, mod_id).hash_stable(&mut hcx, &mut hasher);
+        hasher.write_isize(6); // discriminator
+        hasher.write_str("main");
+        hasher.write_u32(0);
+        let main_id = hasher.finalize().0;
+        (crate_id, main_id)
+    } else {
+        (crate_id, mod_id)
+    }
 }
 
 #[allow(dead_code)]
@@ -60,6 +72,7 @@ fn type_id_of_struct(mod_id: (u64, u64), name: &str, field: &str) -> u64 {
         (crate_id, hasher.finalize().0)
     };
     // println!("struct_did={:x?}", struct_did);
+    // println!("field_did={:x?}", field_did);
     let adt_hash = {
         let mut hasher = StableHasher::new();
         // DefId
@@ -75,8 +88,10 @@ fn type_id_of_struct(mod_id: (u64, u64), name: &str, field: &str) -> u64 {
         field_did.hash_stable(&mut hcx, &mut hasher);
         hasher.write_usize(field.len());
         hasher.write(field.as_bytes());
-        hasher.write_isize(1);
-        mod_id.hash_stable(&mut hcx, &mut hasher);
+        // visibility
+        hasher.write_isize(0);
+        // scope of visibility
+        // mod_id.hash_stable(&mut hcx, &mut hasher); 
         hasher.write_isize(2);
         hasher.write_u32(0);
         // AdtFlags
@@ -171,24 +186,25 @@ fn find_collision(mod_id: (u64, u64), mut a: Point, len_a: u64, mut b: Point, le
 
 fn main() {
     let mod_id = make_mod_id("playground", true,
-        "1.64.0-nightly (7b46aa594 2022-07-05)",
-        vec!["8cc5161d1ab12176".to_owned()],
+        "1.64.0-nightly (7665c3543 2022-07-06)",
+        vec!["a0ecb98bfb1b38c8".to_owned()],
     );
 
-    if false {
+    const I_WANT_TO_DEBUG_DEF_ID: bool = true;
+    if I_WANT_TO_DEBUG_DEF_ID {
         println!("mod def_hash: {:x?}", mod_id);
 
-        let bar_type_id = type_id_of_struct(mod_id, "Bar", "xed51a83c3a27cd30");
-        let foo_type_id = type_id_of_struct(mod_id, "Foo", "x5aa74d3a3d8a70af");
+        let bar_type_id = type_id_of_struct(mod_id, "Bar", "xa4577f991bd8c53a");
+        let foo_type_id = type_id_of_struct(mod_id, "Foo", "x367b9e54d8794eed");
         println!("bar type_id: {:x?}", bar_type_id);
         println!("foo type_id: {:x?}", foo_type_id);
-        println!("next point: {:x}", next_point(mod_id, 0x7543497aa1a3f392));
-        println!("next point: {:x}", next_point(mod_id, 0xaf3f5aafee501b05));
+        // println!("next point: {:x}", next_point(mod_id, 0x7543497aa1a3f392));
+        // println!("next point: {:x}", next_point(mod_id, 0xaf3f5aafee501b05));
 
         // let mut hasher = StableHasher::new();
         // 0usize.hash_stable(&mut hcx, &mut hasher);
         // println!("{:x?}", hasher.finalize());
-        
+
         // println!("next_point: {:x?}", next_point(0x0000000000000000));
     } else {
         static TRAILS: AtomicU64 = AtomicU64::new(0);
